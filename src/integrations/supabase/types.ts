@@ -14,16 +14,157 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      branches: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      employees: {
+        Row: {
+          branch_id: string
+          created_at: string
+          full_name: string
+          id: string
+          position: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          full_name: string
+          id?: string
+          position: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          full_name?: string
+          id?: string
+          position?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employees_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      evaluations: {
+        Row: {
+          employee_id: string
+          evaluated_at: string
+          evaluated_by: string
+          id: string
+          rating: string | null
+        }
+        Insert: {
+          employee_id: string
+          evaluated_at?: string
+          evaluated_by: string
+          id?: string
+          rating?: string | null
+        }
+        Update: {
+          employee_id?: string
+          evaluated_at?: string
+          evaluated_by?: string
+          id?: string
+          rating?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluations_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          email: string
+          full_name: string
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_branch_id: { Args: { _user_id: string }; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "manager"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +291,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "manager"],
+    },
   },
 } as const

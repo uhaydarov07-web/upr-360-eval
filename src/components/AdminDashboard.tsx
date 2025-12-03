@@ -12,13 +12,14 @@ import {
   FileSpreadsheet, 
   Download,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  RefreshCw
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
 export function AdminDashboard() {
   const { user, logout } = useAuth();
-  const { branches, getOverallStats, getAllBranchStats } = useData();
+  const { branches, getOverallStats, getAllBranchStats, isLoading, refreshData } = useData();
   
   const stats = getOverallStats();
   const branchStats = getAllBranchStats();
@@ -37,6 +38,17 @@ export function AdminDashboard() {
     C: branch.ratingC,
   }));
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <p className="mt-2 text-muted-foreground">Ma'lumotlar yuklanmoqda...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -52,7 +64,10 @@ export function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground hidden sm:block">{user?.name}</span>
+            <Button variant="ghost" size="icon" onClick={refreshData}>
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+            <span className="text-sm text-muted-foreground hidden sm:block">{user?.fullName}</span>
             <Button variant="outline" size="sm" onClick={logout}>
               <LogOut className="w-4 h-4 mr-2" />
               Chiqish
@@ -201,19 +216,25 @@ export function AdminDashboard() {
               <CardDescription>Birinchi 6 ta filial</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barData}>
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="A" fill="hsl(142, 71%, 45%)" name="A baho" />
-                    <Bar dataKey="B" fill="hsl(45, 93%, 47%)" name="B baho" />
-                    <Bar dataKey="C" fill="hsl(0, 84%, 60%)" name="C baho" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {barData.length > 0 ? (
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={barData}>
+                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="A" fill="hsl(142, 71%, 45%)" name="A baho" />
+                      <Bar dataKey="B" fill="hsl(45, 93%, 47%)" name="B baho" />
+                      <Bar dataKey="C" fill="hsl(0, 84%, 60%)" name="C baho" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  Ma'lumotlar mavjud emas
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -231,54 +252,61 @@ export function AdminDashboard() {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Filial nomi</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Hodimlar</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Baholangan</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">A</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">B</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">C</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Progress</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {branchStats.map((branch) => {
-                    const progress = branch.total > 0 ? Math.round((branch.evaluated / branch.total) * 100) : 0;
-                    return (
-                      <tr key={branch.branchId} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
-                        <td className="py-3 px-4 font-medium">{branch.branchName}</td>
-                        <td className="py-3 px-4 text-center">{branch.total}</td>
-                        <td className="py-3 px-4 text-center">{branch.evaluated}</td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center justify-center w-8 h-6 rounded bg-rating-a/10 text-rating-a text-sm font-medium">
-                            {branch.ratingA}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center justify-center w-8 h-6 rounded bg-rating-b/10 text-rating-b text-sm font-medium">
-                            {branch.ratingB}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center justify-center w-8 h-6 rounded bg-rating-c/10 text-rating-c text-sm font-medium">
-                            {branch.ratingC}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <Progress value={progress} className="h-2 flex-1" />
-                            <span className="text-xs text-muted-foreground w-10">{progress}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {branchStats.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Filial nomi</th>
+                      <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Hodimlar</th>
+                      <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Baholangan</th>
+                      <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">A</th>
+                      <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">B</th>
+                      <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">C</th>
+                      <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Progress</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {branchStats.map((branch) => {
+                      const progress = branch.total > 0 ? Math.round((branch.evaluated / branch.total) * 100) : 0;
+                      return (
+                        <tr key={branch.branchId} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                          <td className="py-3 px-4 font-medium">{branch.branchName}</td>
+                          <td className="py-3 px-4 text-center">{branch.total}</td>
+                          <td className="py-3 px-4 text-center">{branch.evaluated}</td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-flex items-center justify-center w-8 h-6 rounded bg-rating-a/10 text-rating-a text-sm font-medium">
+                              {branch.ratingA}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-flex items-center justify-center w-8 h-6 rounded bg-rating-b/10 text-rating-b text-sm font-medium">
+                              {branch.ratingB}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-flex items-center justify-center w-8 h-6 rounded bg-rating-c/10 text-rating-c text-sm font-medium">
+                              {branch.ratingC}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <Progress value={progress} className="h-2 flex-1" />
+                              <span className="text-xs text-muted-foreground w-10">{progress}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Building2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>Filiallar hali qo'shilmagan</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

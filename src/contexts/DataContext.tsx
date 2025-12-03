@@ -1,80 +1,155 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Branch, Employee, Rating, EvaluationStats, BranchStats } from '@/types';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+
+export type Rating = 'A' | 'B' | 'C' | null;
+
+export interface Branch {
+  id: string;
+  name: string;
+}
+
+export interface Employee {
+  id: string;
+  fullName: string;
+  position: string;
+  branchId: string;
+  branchName: string;
+  rating: Rating;
+  evaluatedAt?: string;
+  evaluatedBy?: string;
+}
+
+export interface EvaluationStats {
+  total: number;
+  evaluated: number;
+  ratingA: number;
+  ratingB: number;
+  ratingC: number;
+}
+
+export interface BranchStats extends EvaluationStats {
+  branchId: string;
+  branchName: string;
+}
 
 interface DataContextType {
   branches: Branch[];
   employees: Employee[];
-  updateEmployeeRating: (employeeId: string, rating: Rating, evaluatedBy: string) => void;
+  isLoading: boolean;
+  updateEmployeeRating: (employeeId: string, rating: Rating, evaluatedBy: string) => Promise<void>;
   getEmployeesByBranch: (branchId: string) => Employee[];
   getBranchStats: (branchId: string) => EvaluationStats;
   getOverallStats: () => EvaluationStats;
   getAllBranchStats: () => BranchStats[];
+  refreshData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Demo data
-const DEMO_BRANCHES: Branch[] = [
-  { id: 'branch-1', name: 'Toshkent filiali', managerId: 'manager-1', managerName: 'Toshkent filiali boshqaruvchisi' },
-  { id: 'branch-2', name: 'Samarqand filiali', managerId: 'manager-2', managerName: 'Samarqand filiali boshqaruvchisi' },
-  { id: 'branch-3', name: 'Buxoro filiali' },
-  { id: 'branch-4', name: 'Andijon filiali' },
-  { id: 'branch-5', name: 'Farg\'ona filiali' },
-  { id: 'branch-6', name: 'Namangan filiali' },
-  { id: 'branch-7', name: 'Xorazm filiali' },
-  { id: 'branch-8', name: 'Navoiy filiali' },
-  { id: 'branch-9', name: 'Qashqadaryo filiali' },
-  { id: 'branch-10', name: 'Surxondaryo filiali' },
-];
-
-const generateEmployees = (): Employee[] => {
-  const positions = ['Menejer', 'Kassir', 'Konsultant', 'Operatsionist', 'Hisobchi', 'Xavfsizlik xodimi'];
-  const firstNames = ['Aziz', 'Bekzod', 'Dilshod', 'Eldor', 'Farrux', 'Gulnora', 'Hilola', 'Iroda', 'Javlon', 'Kamola'];
-  const lastNames = ['Karimov', 'Rahimov', 'Toshmatov', 'Umarov', 'Xoliqov', 'Yusupov', 'Zokirov', 'Aliyev', 'Boboev', 'Davronov'];
-  
-  const employees: Employee[] = [];
-  let employeeCount = 0;
-  
-  DEMO_BRANCHES.forEach((branch) => {
-    const branchEmployeeCount = Math.floor(Math.random() * 15) + 15; // 15-30 employees per branch
-    for (let i = 0; i < branchEmployeeCount; i++) {
-      employeeCount++;
-      const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
-      const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
-      const randomRating = Math.random();
-      let rating: Rating = null;
-      if (randomRating < 0.3) {
-        rating = ['A', 'B', 'C'][Math.floor(Math.random() * 3)] as Rating;
-      }
-      
-      employees.push({
-        id: `emp-${employeeCount}`,
-        fullName: `${firstName} ${lastName}`,
-        position: positions[Math.floor(Math.random() * positions.length)],
-        branchId: branch.id,
-        branchName: branch.name,
-        rating,
-        evaluatedAt: rating ? new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
-      });
-    }
-  });
-  
-  return employees;
-};
-
-const INITIAL_EMPLOYEES = generateEmployees();
-
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const updateEmployeeRating = (employeeId: string, rating: Rating, evaluatedBy: string) => {
-    setEmployees((prev) =>
-      prev.map((emp) =>
-        emp.id === employeeId
-          ? { ...emp, rating, evaluatedAt: new Date().toISOString(), evaluatedBy }
-          : emp
-      )
-    );
+  const fetchData = useCallback(async () => {
+    try {
+      // Fetch branches
+      const { data: branchesData, error: branchesError } = await supabase
+        .from('branches')
+        .select('*')
+        .order('name');
+
+      if (branchesError) {
+        console.error('Error fetching branches:', branchesError);
+      } else {
+        setBranches(branchesData?.map(b => ({ id: b.id, name: b.name })) || []);
+      }
+
+      // Fetch employees with their evaluations
+      const { data: employeesData, error: employeesError } = await supabase
+        .from('employees')
+        .select(`
+          *,
+          branches(name),
+          evaluations(rating, evaluated_at, evaluated_by)
+        `)
+        .order('full_name');
+
+      if (employeesError) {
+        console.error('Error fetching employees:', employeesError);
+      } else {
+        const mappedEmployees: Employee[] = (employeesData || []).map((emp) => {
+          const evaluation = emp.evaluations?.[0];
+          return {
+            id: emp.id,
+            fullName: emp.full_name,
+            position: emp.position,
+            branchId: emp.branch_id,
+            branchName: emp.branches?.name || '',
+            rating: (evaluation?.rating as Rating) || null,
+            evaluatedAt: evaluation?.evaluated_at,
+            evaluatedBy: evaluation?.evaluated_by,
+          };
+        });
+        setEmployees(mappedEmployees);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const updateEmployeeRating = async (employeeId: string, rating: Rating, evaluatedBy: string) => {
+    try {
+      // Check if evaluation exists
+      const { data: existing } = await supabase
+        .from('evaluations')
+        .select('id')
+        .eq('employee_id', employeeId)
+        .maybeSingle();
+
+      if (existing) {
+        // Update existing evaluation
+        const { error } = await supabase
+          .from('evaluations')
+          .update({
+            rating,
+            evaluated_by: evaluatedBy,
+            evaluated_at: new Date().toISOString(),
+          })
+          .eq('employee_id', employeeId);
+
+        if (error) throw error;
+      } else {
+        // Insert new evaluation
+        const { error } = await supabase
+          .from('evaluations')
+          .insert({
+            employee_id: employeeId,
+            rating,
+            evaluated_by: evaluatedBy,
+          });
+
+        if (error) throw error;
+      }
+
+      // Update local state
+      setEmployees((prev) =>
+        prev.map((emp) =>
+          emp.id === employeeId
+            ? { ...emp, rating, evaluatedAt: new Date().toISOString(), evaluatedBy }
+            : emp
+        )
+      );
+    } catch (error) {
+      console.error('Error updating rating:', error);
+      throw error;
+    }
   };
 
   const getEmployeesByBranch = (branchId: string) => {
@@ -103,7 +178,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const getAllBranchStats = (): BranchStats[] => {
-    return DEMO_BRANCHES.map((branch) => ({
+    return branches.map((branch) => ({
       branchId: branch.id,
       branchName: branch.name,
       ...getBranchStats(branch.id),
@@ -113,13 +188,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   return (
     <DataContext.Provider
       value={{
-        branches: DEMO_BRANCHES,
+        branches,
         employees,
+        isLoading,
         updateEmployeeRating,
         getEmployeesByBranch,
         getBranchStats,
         getOverallStats,
         getAllBranchStats,
+        refreshData: fetchData,
       }}
     >
       {children}

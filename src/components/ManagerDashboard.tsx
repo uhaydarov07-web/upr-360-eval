@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useData } from '@/contexts/DataContext';
+import { useData, Rating } from '@/contexts/DataContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -12,16 +12,17 @@ import {
   CheckCircle2,
   Search,
   Check,
-  Building2
+  Building2,
+  RefreshCw
 } from 'lucide-react';
-import { Rating } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
 export function ManagerDashboard() {
   const { user, logout } = useAuth();
-  const { getEmployeesByBranch, getBranchStats, updateEmployeeRating, branches } = useData();
+  const { getEmployeesByBranch, getBranchStats, updateEmployeeRating, branches, isLoading, refreshData } = useData();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   
   const branchId = user?.branchId || '';
   const employees = getEmployeesByBranch(branchId);
@@ -35,30 +36,73 @@ export function ManagerDashboard() {
     emp.position.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleRating = (employeeId: string, rating: Rating) => {
-    updateEmployeeRating(employeeId, rating, user?.id || '');
-    toast({
-      title: 'Baho saqlandi',
-      description: `Hodimga ${rating} baho qo'yildi`,
-    });
+  const handleRating = async (employeeId: string, rating: Rating) => {
+    if (!user?.id) return;
+    
+    setUpdatingId(employeeId);
+    try {
+      await updateEmployeeRating(employeeId, rating, user.id);
+      toast({
+        title: 'Baho saqlandi',
+        description: `Hodimga ${rating} baho qo'yildi`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Xatolik',
+        description: 'Bahoni saqlashda xatolik yuz berdi',
+        variant: 'destructive',
+      });
+    }
+    setUpdatingId(null);
   };
 
   const getRatingButtonVariant = (currentRating: Rating, buttonRating: Rating) => {
     if (currentRating === buttonRating) {
       switch (buttonRating) {
-        case 'A': return 'ratingA';
-        case 'B': return 'ratingB';
-        case 'C': return 'ratingC';
-        default: return 'outline';
+        case 'A': return 'ratingA' as const;
+        case 'B': return 'ratingB' as const;
+        case 'C': return 'ratingC' as const;
+        default: return 'outline' as const;
       }
     }
     switch (buttonRating) {
-      case 'A': return 'ratingAOutline';
-      case 'B': return 'ratingBOutline';
-      case 'C': return 'ratingCOutline';
-      default: return 'outline';
+      case 'A': return 'ratingAOutline' as const;
+      case 'B': return 'ratingBOutline' as const;
+      case 'C': return 'ratingCOutline' as const;
+      default: return 'outline' as const;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <p className="mt-2 text-muted-foreground">Ma'lumotlar yuklanmoqda...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!branchId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardContent className="pt-6 text-center">
+            <Building2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-xl font-semibold mb-2">Filial tayinlanmagan</h2>
+            <p className="text-muted-foreground mb-4">
+              Sizga hali filial tayinlanmagan. Admin bilan bog'laning.
+            </p>
+            <Button variant="outline" onClick={logout}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Chiqish
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -75,7 +119,10 @@ export function ManagerDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground hidden sm:block">{user?.name}</span>
+            <Button variant="ghost" size="icon" onClick={refreshData}>
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+            <span className="text-sm text-muted-foreground hidden sm:block">{user?.fullName}</span>
             <Button variant="outline" size="sm" onClick={logout}>
               <LogOut className="w-4 h-4 mr-2" />
               Chiqish
@@ -200,6 +247,7 @@ export function ManagerDashboard() {
                       size="sm"
                       className="w-12"
                       onClick={() => handleRating(employee.id, 'A')}
+                      disabled={updatingId === employee.id}
                     >
                       A
                     </Button>
@@ -208,6 +256,7 @@ export function ManagerDashboard() {
                       size="sm"
                       className="w-12"
                       onClick={() => handleRating(employee.id, 'B')}
+                      disabled={updatingId === employee.id}
                     >
                       B
                     </Button>
@@ -216,6 +265,7 @@ export function ManagerDashboard() {
                       size="sm"
                       className="w-12"
                       onClick={() => handleRating(employee.id, 'C')}
+                      disabled={updatingId === employee.id}
                     >
                       C
                     </Button>

@@ -3,6 +3,7 @@ import { DataProvider } from '@/contexts/DataContext';
 import { LoginPage } from '@/components/LoginPage';
 import { AdminDashboard } from '@/components/AdminDashboard';
 import { ManagerDashboard } from '@/components/ManagerDashboard';
+import { NoRolePage } from '@/components/NoRolePage';
 
 function AppContent() {
   const { user, isLoading } = useAuth();
@@ -20,6 +21,10 @@ function AppContent() {
 
   if (!user) {
     return <LoginPage />;
+  }
+
+  if (!user.role) {
+    return <NoRolePage />;
   }
 
   if (user.role === 'admin') {
