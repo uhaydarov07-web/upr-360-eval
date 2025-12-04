@@ -184,48 +184,37 @@ export function AdminSetup() {
 
     setIsAddingManager(true);
     try {
-      // Create user account
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: managerEmail.trim(),
-        password: managerPassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: managerName.trim()
-          }
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error("Sessiya topilmadi, qayta kiring");
+        return;
+      }
+
+      const response = await supabase.functions.invoke('create-user', {
+        body: {
+          email: managerEmail.trim(),
+          password: managerPassword,
+          fullName: managerName.trim(),
+          branchId: managerBranchId,
+          role: 'manager'
         }
       });
 
-      if (authError) throw authError;
-
-      if (authData.user) {
-        // Update profile with branch_id
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ branch_id: managerBranchId })
-          .eq('id', authData.user.id);
-
-        if (profileError) {
-          console.error('Profile update error:', profileError);
-        }
-
-        // Assign manager role
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .insert({
-            user_id: authData.user.id,
-            role: 'manager'
-          });
-
-        if (roleError) throw roleError;
-
-        toast.success("Boshqaruvchi muvaffaqiyatli qo'shildi!");
-        setManagerEmail('');
-        setManagerPassword('');
-        setManagerName('');
-        setManagerBranchId('');
-        fetchManagers();
+      if (response.error) {
+        throw new Error(response.error.message);
       }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      toast.success("Boshqaruvchi muvaffaqiyatli qo'shildi!");
+      setManagerEmail('');
+      setManagerPassword('');
+      setManagerName('');
+      setManagerBranchId('');
+      fetchManagers();
     } catch (error: any) {
       toast.error("Xatolik: " + error.message);
     } finally {
